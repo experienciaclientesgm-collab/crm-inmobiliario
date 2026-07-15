@@ -37,13 +37,18 @@
         const SUPABASE_ANON_KEY = "sb_publishable__Ke4zfQ8QyIsp7dIvrBQHw_yQ3yxQ1Z"; 
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // ---------- CONFIGURACIÓN DE NEGOCIO ----------
+        // ---------- CONFIGURACIÓN DE NEGOCIO PERSONALIZADO ----------
         const ASESORES = [
             "Sin asignar",
-            "Andrea Yzusqui",
-            "Carlos Mendoza",
-            "Sofía Delgado",
-            "Moisés Alva"
+            "Facundo Auada",
+            "Kevin Aparicio",
+            "Brokersita (Admin)"
+        ];
+
+        const PROYECTOS = [
+            "San miguel - La Marina",
+            "San Miguel - Faucett",
+            "La Molina - La encantada"
         ];
 
         const TIPIFICACIONES = [
@@ -203,7 +208,7 @@
             }, [leads, search]);
 
             const triggerWhatsApp = (lead, e) => {
-                e.stopPropagation(); // Prevenir que abra el modal
+                e.stopPropagation(); 
                 const cleanPhone = lead.telefono.replace(/\D/g, "");
                 // Prefijo Perú (+51) por defecto si tiene 9 dígitos
                 const formattedPhone = cleanPhone.length === 9 ? `51${cleanPhone}` : cleanPhone;
@@ -212,7 +217,7 @@
             };
 
             const triggerCall = (lead, e) => {
-                e.stopPropagation(); // Prevenir que abra el modal
+                e.stopPropagation(); 
                 window.open(`tel:${lead.telefono}`, '_self');
             };
 
@@ -229,7 +234,7 @@
 
             return (
                 <div class="min-h-screen flex flex-col">
-                    {/* Header Minimalista y Deportivo de CRMS */}
+                    {/* Header */}
                     <header class="bg-[#111827] text-white px-8 py-4.5 flex justify-between items-center shadow-md">
                         <div class="flex items-center gap-3">
                             <div class="bg-gradient-to-tr from-[#EA4335] to-[#1877F2] p-2 rounded-xl text-white font-extrabold text-sm tracking-tighter">
@@ -331,7 +336,7 @@
                                                             </div>
                                                         </td>
 
-                                                        {/* Acción Rápida (¡Crucial!) */}
+                                                        {/* Acción Rápida */}
                                                         <td class="p-4" onClick={e => e.stopPropagation()}>
                                                             <div class="flex gap-1.5">
                                                                 <button 
@@ -376,7 +381,7 @@
                                                             </span>
                                                         </td>
 
-                                                        {/* Estado / Tipificación */}
+                                                        {/* Estado */}
                                                         <td class="p-4">
                                                             <span class="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-xs font-bold border border-gray-200">
                                                                 {lead.tipificacion}
@@ -494,7 +499,7 @@
             const [telefono, setTelefono] = React.useState("");
             const [email, setEmail] = React.useState("");
             const [fuente, setFuente] = React.useState(Object.keys(FUENTES_CONFIG)[0]);
-            const [proyecto, setProyecto] = React.useState("");
+            const [proyecto, setProyecto] = React.useState(PROYECTOS[0]);
             const [asesor, setAsesor] = React.useState(ASESORES[0]);
 
             const handleSubmit = (e) => {
@@ -519,7 +524,9 @@
                         </div>
                         <div>
                             <label class="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Proyecto</label>
-                            <input type="text" value={proyecto} onChange={e => setProyecto(e.target.value)} class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#111827]/10 focus:border-[#111827] outline-none font-semibold text-gray-800" placeholder="Ej. Torre Miraflores" />
+                            <select value={proyecto} onChange={e => setProyecto(e.target.value)} class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#111827]/10 focus:border-[#111827] outline-none bg-white font-semibold text-gray-700">
+                                {PROYECTOS.map(p => <option key={p} value={p}>{p}</option>)}
+                            </select>
                         </div>
                     </div>
                     <div>
