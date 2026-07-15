@@ -3,28 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRM Inmobiliario - Sagama</title>
+    <title>CRMS - Gestión Inmobiliaria</title>
     <!-- Tailwind CSS para el diseño -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React y Babel para procesar el código en el navegador -->
+    <!-- React y Babel -->
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <!-- CDN de Supabase -->
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <!-- Tipografía Moderna -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        @keyframes pulse-soft {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(0.96); }
+        }
+        .pulse-critical {
+            animation: pulse-soft 2s infinite ease-in-out;
+        }
+    </style>
 </head>
-<body class="bg-[#EEF0EC] text-[#1F2A37] min-h-screen">
+<body class="bg-[#F3F4F6] text-[#111827] min-h-screen flex flex-col antialiased">
 
-    <div id="root"></div>
+    <div id="root" class="flex flex-col min-h-screen"></div>
 
     <script type="text/babel">
         // ---------- CONFIGURACIÓN DE SUPABASE ----------
         const SUPABASE_URL = "https://rjymgzlncuyyxytkvrcr.supabase.co"; 
         const SUPABASE_ANON_KEY = "sb_publishable__Ke4zfQ8QyIsp7dIvrBQHw_yQ3yxQ1Z"; 
-        // Usamos window.supabase para evitar conflictos de nombres
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // ---------- CONFIGURACIÓN DEL CRM ----------
+        // ---------- CONFIGURACIÓN DE NEGOCIO ----------
+        const ASESORES = [
+            "Sin asignar",
+            "Andrea Yzusqui",
+            "Carlos Mendoza",
+            "Sofía Delgado",
+            "Moisés Alva"
+        ];
+
         const TIPIFICACIONES = [
             "Sin tipificar",
             "Interesado - Agenda visita",
@@ -39,21 +60,30 @@
             "Cierre - Vendido"
         ];
 
-        const FUENTES = ["Portal inmobiliario", "Facebook/Instagram", "Referido", "Sala de ventas", "Google", "Otro"];
-        const RESULTADOS_LLAMADA = ["Contestó", "No contestó", "Buzón de voz", "Número ocupado", "Cortó la llamada"];
+        const FUENTES_CONFIG = {
+            "Meta Ads (FB/IG)": { bg: "bg-[#1877F2]/10 text-[#1877F2] border-[#1877F2]/20", label: "Meta Ads 🔵" },
+            "TikTok Ads": { bg: "bg-[#000000]/10 text-[#000000] border-[#000000]/20", label: "TikTok 🎬" },
+            "Google Ads": { bg: "bg-[#EA4335]/10 text-[#EA4335] border-[#EA4335]/20", label: "Google 🔴" },
+            "WhatsApp": { bg: "bg-[#25D366]/10 text-[#25D366] border-[#25D366]/20", label: "WhatsApp 🟢" },
+            "Sala de ventas": { bg: "bg-purple-50 text-purple-700 border-purple-200", label: "Físico 🏢" },
+            "Otro": { bg: "bg-gray-100 text-gray-600 border-gray-200", label: "Otro 🌐" }
+        };
 
         const SEMAFORO = {
-            verde: { color: "bg-emerald-600", text: "text-emerald-600", label: "Óptimo (0-30s)" },
-            amarillo: { color: "bg-amber-500", text: "text-amber-500", label: "Aceptable (30s-2min)" },
-            naranja: { color: "bg-orange-500", text: "text-orange-500", label: "Demora (2-5min)" },
-            rojo: { color: "bg-red-600", text: "text-red-600", label: "Crítico (+5min)" },
-            gris: { color: "bg-gray-400", text: "text-gray-400", label: "Sin contactar" }
+            verde: { color: "bg-emerald-500 text-emerald-700 bg-emerald-50", border: "border-emerald-200", label: "Óptimo (0-30s)" },
+            amarillo: { color: "bg-amber-500 text-amber-700 bg-amber-50", border: "border-amber-200", label: "Aceptable (30s-2m)" },
+            naranja: { color: "bg-orange-500 text-orange-700 bg-orange-50", border: "border-orange-200", label: "Demora (2-5m)" },
+            rojo: { color: "bg-rose-500 text-rose-700 bg-rose-50 border-rose-200 pulse-critical", border: "border-rose-200", label: "Crítico (+5m)" },
+            gris: { color: "bg-gray-400 text-gray-600 bg-gray-50", border: "border-gray-200", label: "Sin contactar" }
         };
 
         function getSemaforo(lead) {
             if (!lead.primer_contacto_seg) {
                 const elapsed = (Date.now() - new Date(lead.fecha_ingreso).getTime()) / 1000;
-                return { key: "gris", segundos: elapsed };
+                if (elapsed <= 30) return { key: "verde", segundos: elapsed };
+                if (elapsed <= 120) return { key: "amarillo", segundos: elapsed };
+                if (elapsed <= 300) return { key: "naranja", segundos: elapsed };
+                return { key: "rojo", segundos: elapsed };
             }
             const s = lead.primer_contacto_seg;
             if (s <= 30) return { key: "verde", segundos: s };
@@ -73,13 +103,11 @@
         function CRMInmobiliario() {
             const [leads, setLeads] = React.useState([]);
             const [loaded, setLoaded] = React.useState(false);
-            const [view, setView] = React.useState("leads");
             const [selectedLead, setSelectedLead] = React.useState(null);
             const [showNewLead, setShowNewLead] = React.useState(false);
             const [search, setSearch] = React.useState("");
             const [, forceTick] = React.useState(0);
 
-            // Cargar leads inicialmente y activar Realtime
             React.useEffect(() => {
                 async function fetchLeads() {
                     const { data, error } = await supabase
@@ -87,24 +115,17 @@
                         .select('*')
                         .order('fecha_ingreso', { ascending: false });
                     
-                    if (!error) {
-                        setLeads(data || []);
-                    }
+                    if (!error) setLeads(data || []);
                     setLoaded(true);
                 }
 
                 fetchLeads();
 
-                // Escuchar cambios en tiempo real
                 const channel = supabase
                     .channel('schema-db-changes')
-                    .on(
-                        'postgres_changes',
-                        { event: '*', schema: 'public', table: 'leads' },
-                        (payload) => {
-                            fetchLeads();
-                        }
-                    )
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
+                        fetchLeads();
+                    })
                     .subscribe();
 
                 return () => {
@@ -112,7 +133,6 @@
                 };
             }, []);
 
-            // Actualizar cronómetro en tiempo real para leads sin atender
             React.useEffect(() => {
                 const interval = setInterval(() => {
                     forceTick(n => n + 1);
@@ -130,7 +150,8 @@
                             email: form.email,
                             fuente: form.fuente,
                             proyecto: form.proyecto,
-                            tipificacion: "Sin tipificar"
+                            tipificacion: "Sin tipificar",
+                            asesor: form.asesor || "Sin asignar"
                         }
                     ]);
 
@@ -141,22 +162,21 @@
                 }
             };
 
-            const handleUpdateTipificacion = async (leadId, nuevaTipificacion) => {
+            const handleUpdateField = async (leadId, field, value) => {
                 const { error } = await supabase
                     .from('leads')
-                    .update({ tipificacion: nuevaTipificacion })
+                    .update({ [field]: value })
                     .eq('id', leadId);
 
                 if (error) {
-                    alert("Error al actualizar la tipificación: " + error.message);
+                    alert(`Error al actualizar ${field}: ` + error.message);
                 } else {
-                    setSelectedLead(prev => prev ? { ...prev, tipificacion: nuevaTipificacion } : null);
+                    setSelectedLead(prev => prev ? { ...prev, [field]: value } : null);
                 }
             };
 
             const handleRegistrarContacto = async (lead) => {
-                if (lead.primer_contacto_seg) return; // Ya tiene primer contacto registrado
-                
+                if (lead.primer_contacto_seg) return;
                 const segundosAtencion = (Date.now() - new Date(lead.fecha_ingreso).getTime()) / 1000;
                 
                 const { error } = await supabase
@@ -177,119 +197,207 @@
                 return leads.filter(l => 
                     (l.nombre || "").toLowerCase().includes(q) ||
                     (l.telefono || "").includes(q) ||
-                    (l.proyecto || "").toLowerCase().includes(q)
+                    (l.proyecto || "").toLowerCase().includes(q) ||
+                    (l.asesor || "").toLowerCase().includes(q)
                 );
             }, [leads, search]);
 
+            const triggerWhatsApp = (lead, e) => {
+                e.stopPropagation(); // Prevenir que abra el modal
+                const cleanPhone = lead.telefono.replace(/\D/g, "");
+                // Prefijo Perú (+51) por defecto si tiene 9 dígitos
+                const formattedPhone = cleanPhone.length === 9 ? `51${cleanPhone}` : cleanPhone;
+                const text = encodeURIComponent(`Hola ${lead.nombre}, gracias por tu interés en nuestro proyecto ${lead.proyecto || ''}. Te saluda un asesor de CRMS, ¿cómo te encuentras hoy?`);
+                window.open(`https://wa.me/${formattedPhone}?text=${text}`, '_blank');
+            };
+
+            const triggerCall = (lead, e) => {
+                e.stopPropagation(); // Prevenir que abra el modal
+                window.open(`tel:${lead.telefono}`, '_self');
+            };
+
             if (!loaded) {
                 return (
-                    <div class="flex items-center justify-center min-h-screen">
-                        <div class="text-lg font-semibold text-gray-600">Conectando con Supabase...</div>
+                    <div class="flex items-center justify-center min-h-screen bg-[#F3F4F6]">
+                        <div class="flex flex-col items-center gap-3">
+                            <div class="w-10 h-10 border-4 border-[#111827] border-t-transparent rounded-full animate-spin"></div>
+                            <div class="text-xs font-bold text-gray-500 tracking-widest uppercase">Iniciando CRMS...</div>
+                        </div>
                     </div>
                 );
             }
 
             return (
                 <div class="min-h-screen flex flex-col">
-                    {/* Header */}
-                    <header class="bg-[#1F2A37] text-[#EEF0EC] px-8 py-4 flex justify-between items-center shadow-md">
+                    {/* Header Minimalista y Deportivo de CRMS */}
+                    <header class="bg-[#111827] text-white px-8 py-4.5 flex justify-between items-center shadow-md">
                         <div class="flex items-center gap-3">
-                            <div class="w-9 h-9 border-2 border-[#C1522E] rounded flex items-center justify-center font-bold text-[#C1522E]">⌂</div>
-                            <div>
-                                <h1 class="font-bold text-lg leading-tight tracking-wide">CRM Inmobiliario</h1>
-                                <p class="text-xs opacity-60">Control de Gestión Comercial · Sagama</p>
+                            <div class="bg-gradient-to-tr from-[#EA4335] to-[#1877F2] p-2 rounded-xl text-white font-extrabold text-sm tracking-tighter">
+                                CRMS
                             </div>
+                            <div>
+                                <h1 class="font-extrabold text-lg tracking-tight leading-none">CRMS</h1>
+                                <p class="text-[10px] text-gray-400 mt-1 uppercase tracking-widest font-bold">Inbound Leads Engine</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 bg-gray-900 px-3 py-1.5 rounded-xl border border-gray-800">
+                            <span class="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                            <span class="text-[11px] font-bold text-gray-400 tracking-wider">REALTIME LINK ACTIVE</span>
                         </div>
                     </header>
 
-                    {/* Contenido Principal */}
-                    <main class="flex-1 p-8 max-w-7xl mx-auto w-full">
-                        <div class="flex justify-between items-center mb-6 gap-4">
+                    {/* Dashboard */}
+                    <main class="flex-1 p-6 max-w-7xl mx-auto w-full">
+                        {/* Buscador & Nuevo Lead */}
+                        <div class="flex flex-col md:flex-row justify-between items-stretch md:items-center mb-6 gap-4">
                             <div class="relative flex-1 max-w-md">
-                                <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">🔍</span>
+                                <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400">🔍</span>
                                 <input 
                                     type="text" 
-                                    placeholder="Buscar lead por nombre, fono o proyecto..." 
+                                    placeholder="Buscar lead, proyecto, fono o asesor..." 
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    class="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#C1522E] shadow-sm"
+                                    class="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#111827]/10 focus:border-[#111827] transition-all shadow-sm"
                                 />
                             </div>
                             <button 
                                 onClick={() => setShowNewLead(true)}
-                                class="bg-[#C1522E] text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-[#a84424] transition-all flex items-center gap-2"
+                                class="bg-[#111827] hover:bg-gray-800 text-white px-5 py-3 rounded-2xl text-xs font-extrabold tracking-wider uppercase transition-all flex items-center justify-center gap-2 shadow-sm"
                             >
-                                ➕ Nuevo Lead
+                                ⚡ Nuevo Prospecto
                             </button>
                         </div>
 
-                        {/* Leyenda Semáforo */}
-                        <div class="flex flex-wrap gap-4 mb-4 text-xs text-gray-500 bg-white p-3 rounded-lg border border-gray-200">
+                        {/* Monitor de Tiempos de Respuesta */}
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6">
                             {Object.entries(SEMAFORO).map(([key, value]) => (
-                                <div key={key} class="flex items-center gap-1.5">
-                                    <span class={`w-2.5 h-2.5 rounded-full ${value.color}`}></span>
-                                    <span>{value.label}</span>
+                                <div key={key} class={`p-3 rounded-2xl border ${value.color} flex flex-col justify-between`}>
+                                    <span class="text-[10px] font-bold uppercase tracking-wider opacity-70">{value.label}</span>
+                                    <span class="text-xs font-semibold mt-1">
+                                        {key === 'verde' && 'Atención Ideal'}
+                                        {key === 'amarillo' && 'Límite aceptable'}
+                                        {key === 'naranja' && 'Retraso comercial'}
+                                        {key === 'rojo' && '¡Pérdida inminente!'}
+                                        {key === 'gris' && 'Contacto establecido'}
+                                    </span>
                                 </div>
                             ))}
                         </div>
 
-                        {/* Tabla de Leads */}
-                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                            <table class="w-full border-collapse text-left text-sm text-gray-600">
-                                <thead class="bg-gray-50 border-b border-gray-200 text-xs font-semibold uppercase text-gray-400">
-                                    <tr>
-                                        <th class="p-4">Est.</th>
-                                        <th class="p-4">Nombre</th>
-                                        <th class="p-4">Teléfono</th>
-                                        <th class="p-4">Proyecto</th>
-                                        <th class="p-4">Fuente</th>
-                                        <th class="p-4">Ingreso</th>
-                                        <th class="p-4">Semaforización</th>
-                                        <th class="p-4">Tipificación</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-100">
-                                    {filteredLeads.length === 0 ? (
+                        {/* Tabla Ultra-Dinámica */}
+                        <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div class="overflow-x-auto">
+                                <table class="w-full border-collapse text-left text-sm">
+                                    <thead class="bg-[#111827] text-white text-[10px] font-extrabold uppercase tracking-widest">
                                         <tr>
-                                            <td colSpan="8" class="p-8 text-center text-gray-400">No se encontraron leads.</td>
+                                            <th class="p-4.5 text-center w-12">Alerta</th>
+                                            <th class="p-4.5">Lead / Contacto</th>
+                                            <th class="p-4.5">Acciones Rápidas</th>
+                                            <th class="p-4.5">Proyecto</th>
+                                            <th class="p-4.5">Origen / Campaña</th>
+                                            <th class="p-4.5">Asesor Asignado</th>
+                                            <th class="p-4.5">Semaforización</th>
+                                            <th class="p-4.5">Estado</th>
                                         </tr>
-                                    ) : (
-                                        filteredLeads.map(lead => {
-                                            const sem = getSemaforo(lead);
-                                            return (
-                                                <tr 
-                                                    key={lead.id} 
-                                                    onClick={() => setSelectedLead(lead)}
-                                                    class="hover:bg-gray-50 cursor-pointer transition-all"
-                                                >
-                                                    <td class="p-4">
-                                                        <span class={`w-3 h-3 rounded-full inline-block ${SEMAFORO[sem.key].color}`} title={SEMAFORO[sem.key].label}></span>
-                                                    </td>
-                                                    <td class="p-4 font-semibold text-gray-900">{lead.nombre}</td>
-                                                    <td class="p-4">{lead.telefono}</td>
-                                                    <td class="p-4 font-medium">{lead.proyecto || "—"}</td>
-                                                    <td class="p-4"><span class="bg-gray-100 text-gray-700 px-2.5 py-1 rounded text-xs">{lead.fuente}</span></td>
-                                                    <td class="p-4 text-xs">{new Date(lead.fecha_ingreso).toLocaleString()}</td>
-                                                    <td class="p-4 font-mono font-medium">
-                                                        {fmtSegundos(sem.segundos)}
-                                                        {sem.key === 'gris' && <span class="text-xs text-gray-400 ml-1">(en curso)</span>}
-                                                    </td>
-                                                    <td class="p-4">
-                                                        <span class="bg-[#C1522E]/10 text-[#C1522E] px-2.5 py-1 rounded-full text-xs font-semibold">{lead.tipificacion}</span>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    )}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100">
+                                        {filteredLeads.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="8" class="p-12 text-center text-gray-400 font-semibold">Sin leads en este momento.</td>
+                                            </tr>
+                                        ) : (
+                                            filteredLeads.map(lead => {
+                                                const sem = getSemaforo(lead);
+                                                const semStyle = SEMAFORO[sem.key];
+                                                const fuenteStyle = FUENTES_CONFIG[lead.fuente] || FUENTES_CONFIG["Otro"];
+                                                const yaContactado = !!lead.primer_contacto_seg;
+
+                                                return (
+                                                    <tr 
+                                                        key={lead.id} 
+                                                        onClick={() => setSelectedLead(lead)}
+                                                        class="hover:bg-gray-50/80 cursor-pointer transition-all duration-100"
+                                                    >
+                                                        {/* Alerta */}
+                                                        <td class="p-4 text-center" onClick={e => e.stopPropagation()}>
+                                                            <span class={`w-3.5 h-3.5 rounded-full inline-block ${semStyle.color.split(' ')[0]} ring-4 ring-offset-2 ring-transparent ${!yaContactado && sem.key === 'rojo' ? 'animate-bounce' : ''}`}></span>
+                                                        </td>
+
+                                                        {/* Nombre y Contacto */}
+                                                        <td class="p-4">
+                                                            <div class="flex flex-col">
+                                                                <span class="font-extrabold text-gray-900 text-sm leading-tight">{lead.nombre}</span>
+                                                                <span class="text-xs text-gray-400 mt-0.5">{lead.telefono}</span>
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Acción Rápida (¡Crucial!) */}
+                                                        <td class="p-4" onClick={e => e.stopPropagation()}>
+                                                            <div class="flex gap-1.5">
+                                                                <button 
+                                                                    onClick={(e) => triggerWhatsApp(lead, e)}
+                                                                    class="bg-emerald-500 hover:bg-emerald-600 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
+                                                                    title="Chatear ya"
+                                                                >
+                                                                    💬 <span class="hidden lg:inline">WhatsApp</span>
+                                                                </button>
+                                                                <button 
+                                                                    onClick={(e) => triggerCall(lead, e)}
+                                                                    class="bg-gray-900 hover:bg-black text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
+                                                                    title="Llamar ya"
+                                                                >
+                                                                    📞 <span class="hidden lg:inline">Llamar</span>
+                                                                </button>
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Proyecto */}
+                                                        <td class="p-4 font-bold text-gray-800 text-xs tracking-wide uppercase">{lead.proyecto || "—"}</td>
+
+                                                        {/* Origen */}
+                                                        <td class="p-4">
+                                                            <span class={`inline-block px-3 py-1 rounded-full text-[10px] font-extrabold border ${fuenteStyle.bg}`}>
+                                                                {fuenteStyle.label}
+                                                            </span>
+                                                        </td>
+
+                                                        {/* Asesor */}
+                                                        <td class="p-4">
+                                                            <span class={`px-2.5 py-1 rounded-xl text-xs font-bold border ${lead.asesor && lead.asesor !== 'Sin asignar' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
+                                                                👤 {lead.asesor || "Sin asignar"}
+                                                            </span>
+                                                        </td>
+
+                                                        {/* Cronómetro */}
+                                                        <td class="p-4 font-mono font-extrabold text-xs">
+                                                            <span class={`px-2.5 py-1 rounded-lg ${yaContactado ? 'bg-gray-100 text-gray-500' : semStyle.color} border`}>
+                                                                ⏱️ {fmtSegundos(sem.segundos)}
+                                                                {!yaContactado && <span class="text-[9px] font-bold ml-1 opacity-60">espera</span>}
+                                                            </span>
+                                                        </td>
+
+                                                        {/* Estado / Tipificación */}
+                                                        <td class="p-4">
+                                                            <span class="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-xs font-bold border border-gray-200">
+                                                                {lead.tipificacion}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </main>
 
                     {/* Modal: Nuevo Lead */}
                     {showNewLead && (
                         <Modal onClose={() => setShowNewLead(false)}>
-                            <h2 class="text-lg font-bold mb-4">Registrar Nuevo Lead</h2>
+                            <h2 class="text-lg font-black text-gray-900 mb-4 flex items-center gap-2 tracking-tight">
+                                🚀 REGISTRAR NUEVO LEAD
+                            </h2>
                             <LeadForm onSave={handleCreateLead} onCancel={() => setShowNewLead(false)} />
                         </Modal>
                     )}
@@ -299,40 +407,67 @@
                         <Modal onClose={() => setSelectedLead(null)}>
                             <div class="flex justify-between items-start border-b border-gray-100 pb-3 mb-4">
                                 <div>
-                                    <h2 class="text-xl font-bold text-gray-900">{selectedLead.nombre}</h2>
-                                    <p class="text-sm text-gray-500">{selectedLead.telefono} · {selectedLead.email || 'Sin correo'}</p>
+                                    <h2 class="text-lg font-black text-gray-900 tracking-tight">{selectedLead.nombre}</h2>
+                                    <p class="text-xs text-gray-400 mt-0.5">Ingreso: {new Date(selectedLead.fecha_ingreso).toLocaleString()}</p>
                                 </div>
-                                <span class={`px-3 py-1 rounded-full text-xs font-bold ${SEMAFORO[getSemaforo(selectedLead).key].color} text-white`}>
-                                    {fmtSegundos(getSemaforo(selectedLead).segundos)}
+                                <span class={`px-2.5 py-1 rounded-xl text-[11px] font-bold border ${SEMAFORO[getSemaforo(selectedLead).key].color}`}>
+                                    Atendido en: {fmtSegundos(getSemaforo(selectedLead).segundos)}
                                 </span>
                             </div>
 
                             <div class="space-y-4">
+                                {/* Datos Rápidos */}
+                                <div class="grid grid-cols-2 gap-3 bg-gray-50 p-3.5 rounded-2xl border border-gray-100 text-xs font-medium">
+                                    <div>
+                                        <span class="text-gray-400 block text-[9px] font-extrabold uppercase">Teléfono</span>
+                                        <span class="text-gray-900 font-bold text-sm">{selectedLead.telefono}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-400 block text-[9px] font-extrabold uppercase">Proyecto</span>
+                                        <span class="text-gray-900 font-bold text-sm uppercase">{selectedLead.proyecto || '—'}</span>
+                                    </div>
+                                </div>
+
+                                {/* Reasignar Asesor */}
                                 <div>
-                                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1.5">Tipificar Lead</label>
+                                    <label class="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Asesor Asignado</label>
                                     <select 
-                                        class="w-full border border-gray-300 rounded-lg p-2.5 text-sm"
+                                        class="w-full border border-gray-200 rounded-xl p-3 text-sm font-semibold text-gray-700 bg-white"
+                                        value={selectedLead.asesor || "Sin asignar"}
+                                        onChange={(e) => handleUpdateField(selectedLead.id, 'asesor', e.target.value)}
+                                    >
+                                        {ASESORES.map(a => <option key={a} value={a}>{a}</option>)}
+                                    </select>
+                                </div>
+
+                                {/* Tipificar Lead */}
+                                <div>
+                                    <label class="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Tipificación Comercial</label>
+                                    <select 
+                                        class="w-full border border-gray-200 rounded-xl p-3 text-sm font-semibold text-gray-700 bg-white"
                                         value={selectedLead.tipificacion}
-                                        onChange={(e) => handleUpdateTipificacion(selectedLead.id, e.target.value)}
+                                        onChange={(e) => handleUpdateField(selectedLead.id, 'tipificacion', e.target.value)}
                                     >
                                         {TIPIFICACIONES.map(t => <option key={t} value={t}>{t}</option>)}
                                     </select>
                                 </div>
 
+                                {/* Parar Reloj */}
                                 {!selectedLead.primer_contacto_seg && (
-                                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                                        <p class="text-sm text-amber-800 mb-3">Este lead aún no registra su primer contacto. Al llamarlo por primera vez, detén el cronómetro presionando el botón.</p>
+                                    <div class="bg-rose-50 border border-rose-100 rounded-2xl p-4">
+                                        <h4 class="text-xs font-extrabold text-rose-800 uppercase tracking-wider mb-1">Contacto pendiente</h4>
+                                        <p class="text-xs text-rose-700/90 mb-3">Si ya llamaste o enviaste el mensaje de WhatsApp, detén el cronómetro para registrar tu tiempo de respuesta.</p>
                                         <button 
                                             onClick={() => handleRegistrarContacto(selectedLead)}
-                                            class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg text-sm transition-all shadow-sm"
+                                            class="w-full bg-[#111827] hover:bg-black text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all tracking-wider uppercase"
                                         >
-                                            📞 Registrar Primer Contacto (Detener Reloj)
+                                            ⏱️ Detener Cronómetro de Atención
                                         </button>
                                     </div>
                                 )}
 
                                 <div class="flex justify-end pt-2 border-t border-gray-100">
-                                    <button onClick={() => setSelectedLead(null)} class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold transition-all">Cerrar Detalle</button>
+                                    <button onClick={() => setSelectedLead(null)} class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-xs font-bold transition-all">Cerrar</button>
                                 </div>
                             </div>
                         </Modal>
@@ -344,9 +479,9 @@
         // ---------- SUB-COMPONENTE: MODAL ----------
         function Modal({ children, onClose }) {
             return (
-                <div class="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
-                    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                        <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-lg" onClick={onClose}>✕</button>
+                <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
+                    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 relative max-h-[90vh] overflow-y-auto border border-gray-100" onClick={e => e.stopPropagation()}>
+                        <button class="absolute top-5 right-5 text-gray-400 hover:text-gray-600 text-lg transition-all" onClick={onClose}>✕</button>
                         {children}
                     </div>
                 </div>
@@ -358,8 +493,9 @@
             const [nombre, setNombre] = React.useState("");
             const [telefono, setTelefono] = React.useState("");
             const [email, setEmail] = React.useState("");
-            const [fuente, setFuente] = React.useState(FUENTES[0]);
+            const [fuente, setFuente] = React.useState(Object.keys(FUENTES_CONFIG)[0]);
             const [proyecto, setProyecto] = React.useState("");
+            const [asesor, setAsesor] = React.useState(ASESORES[0]);
 
             const handleSubmit = (e) => {
                 e.preventDefault();
@@ -367,36 +503,46 @@
                     alert("Por favor completa el nombre y el teléfono.");
                     return;
                 }
-                onSave({ nombre, telefono, email, fuente, proyecto });
+                onSave({ nombre, telefono, email, fuente, proyecto, asesor });
             };
 
             return (
-                <form onSubmit={handleSubmit} class="space-y-4">
+                <form onSubmit={handleSubmit} class="space-y-3.5">
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre Completo *</label>
-                        <input type="text" value={nombre} onChange={e => setNombre(e.target.value)} class="w-full border border-gray-300 rounded-lg p-2.5 text-sm" required />
+                        <label class="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Nombre Completo *</label>
+                        <input type="text" value={nombre} onChange={e => setNombre(e.target.value)} class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#111827]/10 focus:border-[#111827] outline-none font-semibold text-gray-800" placeholder="Ej. Carlos Pérez" required />
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Teléfono *</label>
+                            <input type="text" value={telefono} onChange={e => setTelefono(e.target.value)} class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#111827]/10 focus:border-[#111827] outline-none font-semibold text-gray-800" placeholder="999888777" required />
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Proyecto</label>
+                            <input type="text" value={proyecto} onChange={e => setProyecto(e.target.value)} class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#111827]/10 focus:border-[#111827] outline-none font-semibold text-gray-800" placeholder="Ej. Torre Miraflores" />
+                        </div>
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Teléfono *</label>
-                        <input type="text" value={telefono} onChange={e => setTelefono(e.target.value)} class="w-full border border-gray-300 rounded-lg p-2.5 text-sm" required />
+                        <label class="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Email</label>
+                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#111827]/10 focus:border-[#111827] outline-none font-semibold text-gray-800" placeholder="ejemplo@correo.com" />
                     </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Email</label>
-                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} class="w-full border border-gray-300 rounded-lg p-2.5 text-sm" />
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Fuente</label>
+                            <select value={fuente} onChange={e => setFuente(e.target.value)} class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#111827]/10 focus:border-[#111827] outline-none bg-white font-semibold text-gray-700">
+                                {Object.keys(FUENTES_CONFIG).map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Asignar Asesor</label>
+                            <select value={asesor} onChange={e => setAsesor(e.target.value)} class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#111827]/10 focus:border-[#111827] outline-none bg-white font-semibold text-gray-700">
+                                {ASESORES.map(a => <option key={a} value={a}>{a}</option>)}
+                            </select>
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Fuente de Origen</label>
-                        <select value={fuente} onChange={e => setFuente(e.target.value)} class="w-full border border-gray-300 rounded-lg p-2.5 text-sm">
-                            {FUENTES.map(f => <option key={f} value={f}>{f}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Proyecto de Interés</label>
-                        <input type="text" value={proyecto} onChange={e => setProyecto(e.target.value)} class="w-full border border-gray-300 rounded-lg p-2.5 text-sm" />
-                    </div>
-                    <div class="flex justify-end gap-3 pt-3 border-t border-gray-100">
-                        <button type="button" onClick={onCancel} class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold transition-all">Cancelar</button>
-                        <button type="submit" class="bg-[#C1522E] hover:bg-[#a84424] text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm">Guardar Lead</button>
+                    <div class="flex justify-end gap-2.5 pt-3 border-t border-gray-100">
+                        <button type="button" onClick={onCancel} class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-xs font-bold transition-all">Cancelar</button>
+                        <button type="submit" class="bg-[#111827] hover:bg-gray-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all">Crear Lead</button>
                     </div>
                 </form>
             );
