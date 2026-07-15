@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Inmobiliario - Sagama</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-[#EEF0EC] text-[#1F2A37] min-h-screen">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // ---------- CONFIGURACIÓN DE SUPABASE ----------
+        const SUPABASE_URL = https://rjymgzlncuyyxytkvrcr.supabase.co; 
+        const SUPABASE_ANON_KEY = sb_publishable__Ke4zfQ8QyIsp7dIvrBQHw_yQ3yxQ1Z; 
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // ---------- CONFIGURACIÓN DEL CRM ----------
+        const TIPIFICACIONES = [
+            "Sin tipificar",
+            "Interesado - Agenda visita",
+            "Interesado - Solicita info",
+            "Interesado - En seguimiento",
+            "No contesta",
+            "Buzón de voz",
+            "Número equivocado",
+            "No interesado",
+            "Fuera de presupuesto",
+            "Ya compró / descartado",
+            "Cierre - Vendido"
+        ];
+
+        const FUENTES = ["Portal inmobiliario", "Facebook/Instagram", "Referido", "Sala de ventas", "Google", "Otro"];
+        const RESULTADOS_LLAMADA = ["Contestó", "No contestó", "Buzón de voz", "Número ocupado", "Cortó la llamada"];
+
+        const SEMAFORO = {
+            verde: { color: "bg-emerald-600", text: "text-emerald-600", label: "Óptimo (0-30s)" },
+            amarillo: { color: "bg-amber-500", text: "text-amber-500", label: "Aceptable (30s-2min)" },
+            naranja: { color: "bg-orange-500", text: "text-orange-500", label: "Demora (2-5min)" },
+            rojo: { color: "bg-red-600", text: "text-red-600", label: "Crítico (+5min)" },
+            gris: { color: "bg-gray-400", text: "text-gray-400", label: "Sin contactar" }
+        };
+
+        function getSemaforo(lead) {
+            if (!lead.primer_contacto_seg) {
+                const elapsed = (Date.now() - new Date(lead.fecha_ingreso).getTime()) / 1000;
+                return { key: "gris", segundos: elapsed };
+            }
+            const s = lead.primer_contacto_seg;
+            if (s <= 30) return { key: "verde", segundos: s };
+            if (s <= 120) return { key: "amarillo", segundos: s };
+            if (s <= 300) return { key: "naranja", segundos: s };
+            return { key: "rojo", segundos: s };
+        }
+
+        function fmtSegundos(s) {
+            if (s < 60) return `${Math.round(s)}s`;
+            const m = Math.floor(s / 60);
+            const rest = Math.round(s % 60);
+            return `${m}m ${rest}s`;
+        }
+
+        // ---------- COMPONENTE PRINCIPAL ----------
+        function CRMInmobiliario() {
+            const [leads, setLeads] = React.useState([]);
+            const [loaded, setLoaded] = React.useState(false);
+            const [view, setView] = React.useState("leads");
+            const [selectedLead, setSelectedLead] = React.useState(null);
+            const [showNewLead, setShowNewLead] = React.useState(false);
+            const [search, setSearch] = React.useState("");
+            const [, forceTick] = React.useState(0);
+
+            // Cargar leads inicialmente y activar Realtime
+            React.useEffect(() => {
+                async function fetchLeads() {
+                    const { data, error } = await supabase
+                        .from('leads')
+                        .select('*')
+                        .order('fecha_ingreso', { ascending: false });
+                    
+                    if (!error) {
+                        setLeads(data || []);
+                    }
+                    setLoaded(true);
+                }
+
+                fetchLeads();
+
+                // Escuchar cambios en tiempo real
+                const channel = supabase
+                    .channel('schema-db-changes')
+                    .on(
+                        'postgres_changes',
+                        { event: '*', schema: 'public', table: 'leads' },
+                        (payload) => {
+                            fetchLeads();
+                        }
+                    )
+                    .subscribe();
+
+                return () => {
+                    supabase.removeChannel(channel);
+                };
+            }, []);
+
+            // Actualizar cronómetro en tiempo real para leads sin atender
+            React.useEffect(() => {
+                const interval = setInterval(() => {
+                    forceTick(n => n + 1);
+                }, 1000);
+                return () => clearInterval(interval);
+            }, []);
+
+            const handleCreateLead = async (form) => {
+                const { error } = await supabase
+                    .from('leads')
+                    .insert([
+                        {
+                            nombre: form.nombre,
+                            telefono: form.telefono,
+                            email: form.email,
+                            fuente: form.fuente,
+                            proyecto: form.proyecto,
+                            tipificacion: "Sin tipificar"
+                        }
+                    ]);
+
+                if (error) {
+                    alert("Error al crear el lead: " + error.message);
+                } else {
+                    setShowNewLead(false);
+                }
+            };
+
+            const handleUpdateTipificacion = async (leadId, nuevaTipificacion) => {
+                const { error } = await supabase
+                    .from('leads')
+                    .update({ tipificacion: nuevaTipificacion })
+                    .eq('id', leadId);
+
+                if (error) {
+                    alert("Error al actualizar la tipificación: " + error.message);
+                } else {
+                    setSelectedLead(prev => prev ? { ...prev, tipificacion: nuevaTipificacion } : null);
+                }
+            };
+
+            const handleRegistrarContacto = async (lead) => {
+                if (lead.primer_contacto_seg) return; // Ya tiene primer contacto registrado
+                
+                const segundosAtencion = (Date.now() - new Date(lead.fecha_ingreso).getTime()) / 1000;
+                
+                const { error } = await supabase
+                    .from('leads')
+                    .update({ primer_contacto_seg: Math.round(segundosAtencion) })
+                    .eq('id', lead.id);
+
+                if (error) {
+                    alert("Error al registrar contacto: " + error.message);
+                } else {
+                    setSelectedLead(null);
+                }
+            };
+
+            const filteredLeads = React.useMemo(() => {
+                const q = search.trim().toLowerCase();
+                if (!q) return leads;
+                return leads.filter(l => 
+                    (l.nombre || "").toLowerCase().includes(q) ||
+                    (l.telefono || "").includes(q) ||
+                    (l.proyecto || "").toLowerCase().includes(q)
+                );
+            }, [leads, search]);
+
+            if (!loaded) {
+                return (
+                    <div class="flex items-center justify-center min-h-screen">
+                        <div class="text-lg font-semibold text-gray-600">Conectando con Supabase...</div>
+                    </div>
+                );
+            }
+
+            return (
+                <div class="min-h-screen flex flex-col">
+                    {/* Header */}
+                    <header class="bg-[#1F2A37] text-[#EEF0EC] px-8 py-4 flex justify-between items-center shadow-md">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 border-2 border-[#C1522E] rounded flex items-center justify-center font-bold text-[#C1522E]">⌂</div>
+                            <div>
+                                <h1 class="font-bold text-lg leading-tight tracking-wide">CRM Inmobiliario</h1>
+                                <p class="text-xs opacity-60">Control de Gestión Comercial · Sagama</p>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Contenido Principal */}
+                    <main class="flex-1 p-8 max-w-7xl mx-auto w-full">
+                        <div class="flex justify-between items-center mb-6 gap-4">
+                            <div class="relative flex-1 max-w-md">
+                                <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">🔍</span>
+                                <input 
+                                    type="text" 
+                                    placeholder="Buscar lead por nombre, fono o proyecto..." 
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    class="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#C1522E] shadow-sm"
+                                />
+                            </div>
+                            <button 
+                                onClick={() => setShowNewLead(true)}
+                                class="bg-[#C1522E] text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-[#a84424] transition-all flex items-center gap-2"
+                            >
+                                ➕ Nuevo Lead
+                            </button>
+                        </div>
+
+                        {/* Leyenda Semáforo */}
+                        <div class="flex flex-wrap gap-4 mb-4 text-xs text-gray-500 bg-white p-3 rounded-lg border border-gray-200">
+                            {Object.entries(SEMAFORO).map(([key, value]) => (
+                                <div key={key} class="flex items-center gap-1.5">
+                                    <span class={`w-2.5 h-2.5 rounded-full ${value.color}`}></span>
+                                    <span>{value.label}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Tabla de Leads */}
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <table class="w-full border-collapse text-left text-sm text-gray-600">
+                                <thead class="bg-gray-50 border-b border-gray-200 text-xs font-semibold uppercase text-gray-400">
+                                    <tr>
+                                        <th class="p-4">Est.</th>
+                                        <th class="p-4">Nombre</th>
+                                        <th class="p-4">Teléfono</th>
+                                        <th class="p-4">Proyecto</th>
+                                        <th class="p-4">Fuente</th>
+                                        <th class="p-4">Ingreso</th>
+                                        <th class="p-4">Semaforización</th>
+                                        <th class="p-4">Tipificación</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    {filteredLeads.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="8" class="p-8 text-center text-gray-400">No se encontraron leads.</td>
+                                        </tr>
+                                    ) : (
+                                        filteredLeads.map(lead => {
+                                            const sem = getSemaforo(lead);
+                                            return (
+                                                <tr 
+                                                    key={lead.id} 
+                                                    onClick={() => setSelectedLead(lead)}
+                                                    class="hover:bg-gray-50 cursor-pointer transition-all"
+                                                >
+                                                    <td class="p-4">
+                                                        <span class={`w-3 h-3 rounded-full inline-block ${SEMAFORO[sem.key].color}`} title={SEMAFORO[sem.key].label}></span>
+                                                    </td>
+                                                    <td class="p-4 font-semibold text-gray-900">{lead.nombre}</td>
+                                                    <td class="p-4">{lead.telefono}</td>
+                                                    <td class="p-4 font-medium">{lead.proyecto || "—"}</td>
+                                                    <td class="p-4"><span class="bg-gray-100 text-gray-700 px-2.5 py-1 rounded text-xs">{lead.fuente}</span></td>
+                                                    <td class="p-4 text-xs">{new Date(lead.fecha_ingreso).toLocaleString()}</td>
+                                                    <td class="p-4 font-mono font-medium">
+                                                        {fmtSegundos(sem.segundos)}
+                                                        {sem.key === 'gris' && <span class="text-xs text-gray-400 ml-1">(en curso)</span>}
+                                                    </td>
+                                                    <td class="p-4">
+                                                        <span class="bg-[#C1522E]/10 text-[#C1522E] px-2.5 py-1 rounded-full text-xs font-semibold">{lead.tipificacion}</span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </main>
+
+                    {/* Modal: Nuevo Lead */}
+                    {showNewLead && (
+                        <Modal onClose={() => setShowNewLead(false)}>
+                            <h2 class="text-lg font-bold mb-4">Registrar Nuevo Lead</h2>
+                            <LeadForm onSave={handleCreateLead} onCancel={() => setShowNewLead(false)} />
+                        </Modal>
+                    )}
+
+                    {/* Modal: Detalle de Lead */}
+                    {selectedLead && (
+                        <Modal onClose={() => setSelectedLead(null)}>
+                            <div class="flex justify-between items-start border-b border-gray-100 pb-3 mb-4">
+                                <div>
+                                    <h2 class="text-xl font-bold text-gray-900">{selectedLead.nombre}</h2>
+                                    <p class="text-sm text-gray-500">{selectedLead.telefono} · {selectedLead.email || 'Sin correo'}</p>
+                                </div>
+                                <span class={`px-3 py-1 rounded-full text-xs font-bold ${SEMAFORO[getSemaforo(selectedLead).key].color} text-white`}>
+                                    {fmtSegundos(getSemaforo(selectedLead).segundos)}
+                                </span>
+                            </div>
+
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1.5">Tipificar Lead</label>
+                                    <select 
+                                        class="w-full border border-gray-300 rounded-lg p-2.5 text-sm"
+                                        value={selectedLead.tipificacion}
+                                        onChange={(e) => handleUpdateTipificacion(selectedLead.id, e.target.value)}
+                                    >
+                                        {TIPIFICACIONES.map(t => <option key={t} value={t}>{t}</option>)}
+                                    </select>
+                                </div>
+
+                                {!selectedLead.primer_contacto_seg && (
+                                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                                        <p class="text-sm text-amber-800 mb-3">Este lead aún no registra su primer contacto. Al llamarlo por primera vez, detén el cronómetro presionando el botón.</p>
+                                        <button 
+                                            onClick={() => handleRegistrarContacto(selectedLead)}
+                                            class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg text-sm transition-all shadow-sm"
+                                        >
+                                            📞 Registrar Primer Contacto (Detener Reloj)
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div class="flex justify-end pt-2 border-t border-gray-100">
+                                    <button onClick={() => setSelectedLead(null)} class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold transition-all">Cerrar Detalle</button>
+                                </div>
+                            </div>
+                        </Modal>
+                    )}
+                </div>
+            );
+        }
+
+        // ---------- SUB-COMPONENTE: MODAL ----------
+        function Modal({ children, onClose }) {
+            return (
+                <div class="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 animate-fade-in" onClick={onClose}>
+                    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-lg" onClick={onClose}>✕</button>
+                        {children}
+                    </div>
+                </div>
+            );
+        }
+
+        // ---------- SUB-COMPONENTE: FORMULARIO ----------
+        function LeadForm({ onSave, onCancel }) {
+            const [nombre, setNombre] = React.useState("");
+            const [telefono, setTelefono] = React.useState("");
+            const [email, setEmail] = React.useState("");
+            const [fuente, setFuente] = React.useState(FUENTES[0]);
+            const [proyecto, setProyecto] = React.useState("");
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!nombre || !telefono) {
+                    alert("Por favor completa el nombre y el teléfono.");
+                    return;
+                }
+                onSave({ nombre, telefono, email, fuente, proyecto });
+            };
+
+            return (
+                <form onSubmit={handleSubmit} class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre Completo *</label>
+                        <input type="text" value={nombre} onChange={e => setNombre(e.target.value)} class="w-full border border-gray-300 rounded-lg p-2.5 text-sm" required />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Teléfono *</label>
+                        <input type="text" value={telefono} onChange={e => setTelefono(e.target.value)} class="w-full border border-gray-300 rounded-lg p-2.5 text-sm" required />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Email</label>
+                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} class="w-full border border-gray-300 rounded-lg p-2.5 text-sm" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Fuente de Origen</label>
+                        <select value={fuente} onChange={e => setFuente(e.target.value)} class="w-full border border-gray-300 rounded-lg p-2.5 text-sm">
+                            {FUENTES.map(f => <option key={f} value={f}>{f}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Proyecto de Interés</label>
+                        <input type="text" value={proyecto} onChange={e => setProyecto(e.target.value)} class="w-full border border-gray-300 rounded-lg p-2.5 text-sm" />
+                    </div>
+                    <div class="flex justify-end gap-3 pt-3 border-t border-gray-100">
+                        <button type="button" onClick={onCancel} class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold transition-all">Cancelar</button>
+                        <button type="submit" class="bg-[#C1522E] hover:bg-[#a84424] text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm">Guardar Lead</button>
+                    </div>
+                </form>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<CRMInmobiliario />);
+    </script>
+</body>
+</html>
