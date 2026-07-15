@@ -1,34 +1,73 @@
+Exit code: 0
+Wall time: 1.9 seconds
+Output:
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRMS - Gestión Inmobiliaria Sagama</title>
+    <title>CRMS - Gestión Inmobiliaria</title>
+    <!-- Tailwind CSS para el diseño -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React y Babel -->
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- CDN de Supabase -->
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <!-- Tipografía Moderna -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
-        @keyframes pulse-soft { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.8; transform: scale(0.96); } }
-        .pulse-critical { animation: pulse-soft 2s infinite ease-in-out; }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        @keyframes pulse-soft {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(0.96); }
+        }
+        .pulse-critical {
+            animation: pulse-soft 2s infinite ease-in-out;
+        }
     </style>
 </head>
-<body class="bg-[#F3F4F6] text-[#111827] min-h-screen">
+<body class="bg-[#F3F4F6] text-[#111827] min-h-screen flex flex-col antialiased">
 
-    <div id="root"></div>
+    <div id="root" class="flex flex-col min-h-screen"></div>
 
     <script type="text/babel">
+        // ---------- CONFIGURACIÓN DE SUPABASE ----------
         const SUPABASE_URL = "https://rjymgzlncuyyxytkvrcr.supabase.co"; 
         const SUPABASE_ANON_KEY = "sb_publishable__Ke4zfQ8QyIsp7dIvrBQHw_yQ3yxQ1Z"; 
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        const ASESORES = ["Sin asignar", "Facundo Auada", "Kevin Aparicio", "Brokersita (Admin)"];
-        const PROYECTOS = ["San miguel - La Marina", "San Miguel - Faucett", "La Molina - La encantada"];
-        const TIPIFICACIONES = ["Sin tipificar", "Interesado - Agenda visita", "Interesado - Solicita info", "Interesado - En seguimiento", "No contesta", "Buzón de voz", "Número equivocado", "No interesado", "Fuera de presupuesto", "Ya compró / descartado", "Cierre - Vendido"];
-        
+        // ---------- CONFIGURACIÓN DE NEGOCIO PERSONALIZADO ----------
+        const ASESORES = [
+            "Sin asignar",
+            "Facundo Auada",
+            "Kevin Aparicio",
+            "Brokersita (Admin)"
+        ];
+
+        const PROYECTOS = [
+            "San miguel - La Marina",
+            "San Miguel - Faucett",
+            "La Molina - La encantada"
+        ];
+
+        const TIPIFICACIONES = [
+            "Sin tipificar",
+            "Interesado - Agenda visita",
+            "Interesado - Solicita info",
+            "Interesado - En seguimiento",
+            "No contesta",
+            "Buzón de voz",
+            "Número equivocado",
+            "No interesado",
+            "Fuera de presupuesto",
+            "Ya compró / descartado",
+            "Cierre - Vendido"
+        ];
+
         const FUENTES_CONFIG = {
             "Meta Ads (FB/IG)": { bg: "bg-[#1877F2]/10 text-[#1877F2] border-[#1877F2]/20", label: "Meta Ads 🔵" },
             "TikTok Ads": { bg: "bg-[#000000]/10 text-[#000000] border-[#000000]/20", label: "TikTok 🎬" },
@@ -39,15 +78,15 @@
         };
 
         const SEMAFORO = {
-            verde: { color: "bg-emerald-500 text-emerald-700 bg-emerald-50", label: "Óptimo" },
-            amarillo: { color: "bg-amber-500 text-amber-700 bg-amber-50", label: "Aceptable" },
-            naranja: { color: "bg-orange-500 text-orange-700 bg-orange-50", label: "Demora" },
-            rojo: { color: "bg-rose-500 text-rose-700 bg-rose-50 pulse-critical", label: "Crítico" },
-            gris: { color: "bg-gray-400 text-gray-600 bg-gray-50", label: "Sin contactar" }
+            verde: { color: "bg-emerald-500 text-emerald-700 bg-emerald-50", border: "border-emerald-200", label: "Óptimo (0-30s)" },
+            amarillo: { color: "bg-amber-500 text-amber-700 bg-amber-50", border: "border-amber-200", label: "Aceptable (30s-2m)" },
+            naranja: { color: "bg-orange-500 text-orange-700 bg-orange-50", border: "border-orange-200", label: "Demora (2-5m)" },
+            rojo: { color: "bg-rose-500 text-rose-700 bg-rose-50 border-rose-200 pulse-critical", border: "border-rose-200", label: "Crítico (+5m)" },
+            gris: { color: "bg-gray-400 text-gray-600 bg-gray-50", border: "border-gray-200", label: "Sin contactar" }
         };
 
         function getSemaforo(lead) {
-            if (!lead.primer_contacto_seg) {
+            if (!tienePrimerContacto(lead)) {
                 const elapsed = (Date.now() - new Date(lead.fecha_ingreso).getTime()) / 1000;
                 if (elapsed <= 30) return { key: "verde", segundos: elapsed };
                 if (elapsed <= 120) return { key: "amarillo", segundos: elapsed };
@@ -63,96 +102,532 @@
 
         function fmtSegundos(s) {
             if (s < 60) return `${Math.round(s)}s`;
-            return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
+            const m = Math.floor(s / 60);
+            const rest = Math.round(s % 60);
+            return `${m}m ${rest}s`;
         }
 
+
+        function tienePrimerContacto(lead) {
+            return lead.primer_contacto_seg !== null && lead.primer_contacto_seg !== undefined;
+        }
+
+        function Dashboard({ leads }) {
+            const data = React.useMemo(() => {
+                const atendidos = leads.filter(tienePrimerContacto);
+                const promedio = filas => filas.length ? filas.reduce((s, lead) => s + Number(lead.primer_contacto_seg), 0) / filas.length : null;
+                const agrupar = (campo, excluir) => Object.entries(atendidos.reduce((acc, lead) => {
+                    const nombre = lead[campo] || "Sin asignar";
+                    if (!excluir || !excluir(nombre)) (acc[nombre] ||= []).push(lead);
+                    return acc;
+                }, {})).map(([nombre, filas]) => ({ nombre, cantidad: filas.length, sla: promedio(filas) }))
+                  .sort((a, b) => a.sla - b.sla || b.cantidad - a.cantidad);
+                const semaforo = leads.reduce((acc, lead) => {
+                    const key = getSemaforo(lead).key; acc[key] = (acc[key] || 0) + 1; return acc;
+                }, { verde: 0, amarillo: 0, naranja: 0, rojo: 0, gris: 0 });
+                return { total: leads.length, atendidos: atendidos.length, pendientes: leads.length - atendidos.length, sla: promedio(atendidos), asesores: agrupar("asesor", n => n === "Sin asignar"), canales: agrupar("fuente"), semaforo };
+            }, [leads]);
+            const asesor = data.asesores[0], canal = data.canales[0];
+            const colorSla = data.sla === null ? "text-gray-400" : data.sla <= 30 ? "text-emerald-600" : data.sla <= 120 ? "text-amber-600" : "text-rose-600";
+            return <section class="space-y-5">
+                <div class="flex flex-col md:flex-row md:items-end justify-between gap-3">
+                    <div><p class="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Inteligencia comercial</p><h2 class="text-2xl font-black text-gray-900 mt-1">Dashboard de atención</h2><p class="text-sm text-gray-500 mt-1">Indicadores actualizados con tus leads en Supabase.</p></div>
+                    <span class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-500">{data.total} leads registrados</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <TarjetaDashboard etiqueta="SLA promedio" valor={data.sla === null ? "—" : fmtSegundos(data.sla)} detalle={`${data.atendidos} atendidos`} color={colorSla} />
+                    <TarjetaDashboard etiqueta="Asesor estrella" valor={asesor ? asesor.nombre : "Sin datos"} detalle={asesor ? `${fmtSegundos(asesor.sla)} promedio · ${asesor.cantidad} leads` : "Aparecerá al registrar contactos"} color="text-amber-600" />
+                    <TarjetaDashboard etiqueta="Canal estrella" valor={canal ? canal.nombre : "Sin datos"} detalle={canal ? `${fmtSegundos(canal.sla)} promedio · ${canal.cantidad} leads` : "Aparecerá al registrar contactos"} color="text-cyan-600" />
+                </div>
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                    <div class="flex justify-between items-center mb-4"><div><p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Semáforo de atención</p><p class="text-xs text-gray-500 mt-1">{data.pendientes} leads sin primer contacto registrado</p></div></div>
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">{Object.entries(SEMAFORO).map(([key, value]) => <div key={key} class="rounded-xl border border-gray-100 p-3 bg-gray-50"><div class="flex justify-between items-center"><span class={`w-3 h-3 rounded-full ${value.color.split(' ')[0]}`}></span><strong class="text-2xl font-black text-gray-800">{data.semaforo[key]}</strong></div><span class="block text-[10px] font-bold text-gray-500 uppercase mt-3">{value.label}</span></div>)}</div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5"><Ranking titulo="Rendimiento por asesor" filas={data.asesores} color="text-amber-600" /><Ranking titulo="Rendimiento por canal" filas={data.canales} color="text-cyan-600" /></div>
+            </section>;
+        }
+
+        function TarjetaDashboard({ etiqueta, valor, detalle, color }) {
+            return <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm"><p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">{etiqueta}</p><h3 class={`text-xl font-black truncate mt-3 ${color}`}>{valor}</h3><p class="text-[10px] text-gray-400 mt-2">{detalle}</p></div>;
+        }
+
+        function Ranking({ titulo, filas, color }) {
+            return <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"><div class="p-5 border-b border-gray-100"><h3 class="font-black text-gray-900">{titulo}</h3><p class="text-[10px] text-gray-400 mt-1">Ordenado por menor tiempo de respuesta</p></div>{filas.length ? filas.slice(0, 5).map((fila, i) => <div key={fila.nombre} class="flex justify-between items-center px-5 py-3 border-b border-gray-50 last:border-0"><div class="flex items-center gap-3 min-w-0"><span class="w-6 h-6 rounded-lg bg-gray-100 text-[10px] font-black text-gray-500 flex items-center justify-center">{i + 1}</span><span class="font-bold text-sm text-gray-800 truncate">{fila.nombre}</span></div><div class="text-right"><strong class={`text-sm font-black ${color}`}>{fmtSegundos(fila.sla)}</strong><span class="block text-[10px] text-gray-400">{fila.cantidad} leads</span></div></div>) : <p class="p-5 text-sm text-gray-400">Aún no hay contactos registrados.</p>}</div>;
+        }
+
+        // ---------- COMPONENTE PRINCIPAL ----------
         function CRMInmobiliario() {
             const [leads, setLeads] = React.useState([]);
             const [loaded, setLoaded] = React.useState(false);
             const [selectedLead, setSelectedLead] = React.useState(null);
             const [showNewLead, setShowNewLead] = React.useState(false);
             const [search, setSearch] = React.useState("");
+            const [vista, setVista] = React.useState("leads");
             const [, forceTick] = React.useState(0);
-
-            const stats = React.useMemo(() => {
-                if (leads.length === 0) return { sla: "--", asesor: "--", canal: "--" };
-                const conContacto = leads.filter(l => l.primer_contacto_seg);
-                const avgSla = conContacto.length > 0 ? Math.round(conContacto.reduce((acc, curr) => acc + curr.primer_contacto_seg, 0) / conContacto.length) : 0;
-                const bestAsesor = leads.reduce((a, b) => (leads.filter(l => l.asesor === a).length > leads.filter(l => l.asesor === b.asesor).length ? a : b.asesor), "Ninguno");
-                const bestCanal = leads.reduce((a, b) => (leads.filter(l => l.fuente === a).length > leads.filter(l => l.fuente === b.fuente).length ? a : b.fuente), "Ninguno");
-                return { sla: avgSla > 0 ? fmtSegundos(avgSla) : "0s", asesor: bestAsesor, canal: bestCanal };
-            }, [leads]);
 
             React.useEffect(() => {
                 async function fetchLeads() {
-                    const { data } = await supabase.from('leads').select('*').order('fecha_ingreso', { ascending: false });
-                    setLeads(data || []);
+                    const { data, error } = await supabase
+                        .from('leads')
+                        .select('*')
+                        .order('fecha_ingreso', { ascending: false });
+                    
+                    if (!error) setLeads(data || []);
                     setLoaded(true);
                 }
+
                 fetchLeads();
-                const channel = supabase.channel('leads').on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, fetchLeads).subscribe();
-                const interval = setInterval(() => forceTick(n => n + 1), 1000);
-                return () => { supabase.removeChannel(channel); clearInterval(interval); };
+
+                const channel = supabase
+                    .channel('schema-db-changes')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
+                        fetchLeads();
+                    })
+                    .subscribe();
+
+                return () => {
+                    supabase.removeChannel(channel);
+                };
             }, []);
 
-            const filteredLeads = leads.filter(l => (l.nombre?.toLowerCase().includes(search.toLowerCase()) || l.telefono?.includes(search)));
+            React.useEffect(() => {
+                const interval = setInterval(() => {
+                    forceTick(n => n + 1);
+                }, 1000);
+                return () => clearInterval(interval);
+            }, []);
+
+            const handleCreateLead = async (form) => {
+                const { error } = await supabase
+                    .from('leads')
+                    .insert([
+                        {
+                            nombre: form.nombre,
+                            telefono: form.telefono,
+                            email: form.email,
+                            fuente: form.fuente,
+                            proyecto: form.proyecto,
+                            tipificacion: "Sin tipificar",
+                            asesor: form.asesor || "Sin asignar"
+                        }
+                    ]);
+
+                if (error) {
+                    alert("Error al crear el lead: " + error.message);
+                } else {
+                    setShowNewLead(false);
+                }
+            };
+
+            const handleUpdateField = async (leadId, field, value) => {
+                const { error } = await supabase
+                    .from('leads')
+                    .update({ [field]: value })
+                    .eq('id', leadId);
+
+                if (error) {
+                    alert(`Error al actualizar ${field}: ` + error.message);
+                } else {
+                    setSelectedLead(prev => prev ? { ...prev, [field]: value } : null);
+                }
+            };
+
+            const handleRegistrarContacto = async (lead) => {
+                if (tienePrimerContacto(lead)) return;
+                const segundosAtencion = (Date.now() - new Date(lead.fecha_ingreso).getTime()) / 1000;
+                
+                const { error } = await supabase
+                    .from('leads')
+                    .update({ primer_contacto_seg: Math.round(segundosAtencion) })
+                    .eq('id', lead.id);
+
+                if (error) {
+                    alert("Error al registrar contacto: " + error.message);
+                } else {
+                    setSelectedLead(null);
+                }
+            };
+
+            const filteredLeads = React.useMemo(() => {
+                const q = search.trim().toLowerCase();
+                if (!q) return leads;
+                return leads.filter(l => 
+                    (l.nombre || "").toLowerCase().includes(q) ||
+                    (l.telefono || "").includes(q) ||
+                    (l.proyecto || "").toLowerCase().includes(q) ||
+                    (l.asesor || "").toLowerCase().includes(q)
+                );
+            }, [leads, search]);
+
+            const triggerWhatsApp = (lead, e) => {
+                e.stopPropagation(); 
+                const cleanPhone = lead.telefono.replace(/\D/g, "");
+                // Prefijo Perú (+51) por defecto si tiene 9 dígitos
+                const formattedPhone = cleanPhone.length === 9 ? `51${cleanPhone}` : cleanPhone;
+                const text = encodeURIComponent(`Hola ${lead.nombre}, gracias por tu interés en nuestro proyecto ${lead.proyecto || ''}. Te saluda un asesor de CRMS, ¿cómo te encuentras hoy?`);
+                window.open(`https://wa.me/${formattedPhone}?text=${text}`, '_blank');
+            };
+
+            const triggerCall = (lead, e) => {
+                e.stopPropagation(); 
+                window.open(`tel:${lead.telefono}`, '_self');
+            };
+
+            if (!loaded) {
+                return (
+                    <div class="flex items-center justify-center min-h-screen bg-[#F3F4F6]">
+                        <div class="flex flex-col items-center gap-3">
+                            <div class="w-10 h-10 border-4 border-[#111827] border-t-transparent rounded-full animate-spin"></div>
+                            <div class="text-xs font-bold text-gray-500 tracking-widest uppercase">Iniciando CRMS...</div>
+                        </div>
+                    </div>
+                );
+            }
 
             return (
-                <div class="min-h-screen">
-                    <header class="bg-[#111827] text-white p-6 shadow-md">
-                        <h1 class="font-black text-2xl">Sagama CRM</h1>
+                <div class="min-h-screen flex flex-col">
+                    {/* Header */}
+                    <header class="bg-[#111827] text-white px-8 py-4.5 flex justify-between items-center shadow-md">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-gradient-to-tr from-[#EA4335] to-[#1877F2] p-2 rounded-xl text-white font-extrabold text-sm tracking-tighter">
+                                CRMS
+                            </div>
+                            <div>
+                                <h1 class="font-extrabold text-lg tracking-tight leading-none">CRMS</h1>
+                                <p class="text-[10px] text-gray-400 mt-1 uppercase tracking-widest font-bold">Inbound Leads Engine</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="hidden sm:flex bg-gray-900 rounded-xl border border-gray-800 p-1">
+                                <button onClick={() => setVista("leads")} class={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold tracking-wider ${vista === "leads" ? "bg-white text-gray-900" : "text-gray-400"}`}>LEADS</button>
+                                <button onClick={() => setVista("dashboard")} class={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold tracking-wider ${vista === "dashboard" ? "bg-white text-gray-900" : "text-gray-400"}`}>DASHBOARD</button>
+                            </div>
+                            <div class="bg-gray-900 px-3 py-1.5 rounded-xl border border-gray-800"><span class="w-2.5 h-2.5 bg-emerald-500 rounded-full inline-block animate-pulse mr-1.5"></span><span class="text-[11px] font-bold text-gray-400 tracking-wider">REALTIME LINK ACTIVE</span></div>
+                        </div>
                     </header>
-                    <main class="p-6 max-w-6xl mx-auto">
-                        <div class="grid grid-cols-3 gap-4 mb-6">
-                            <div class="bg-white p-4 rounded-2xl border">
-                                <p class="text-[10px] font-bold text-gray-400">SLA PROMEDIO</p>
-                                <h3 class="text-lg font-black text-emerald-600">{stats.sla}</h3>
+
+                    {/* Dashboard */}
+                    <main class="flex-1 p-6 max-w-7xl mx-auto w-full">
+                        {vista === "dashboard" ? <Dashboard leads={leads} /> : <>
+                        {/* Buscador & Nuevo Lead */}
+                        <div class="flex flex-col md:flex-row justify-between items-stretch md:items-center mb-6 gap-4">
+                            <div class="relative flex-1 max-w-md">
+                                <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-gray-400">🔍</span>
+                                <input 
+                                    type="text" 
+                                    placeholder="Buscar lead, proyecto, fono o asesor..." 
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    class="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#111827]/10 focus:border-[#111827] transition-all shadow-sm"
+                                />
                             </div>
-                            <div class="bg-white p-4 rounded-2xl border">
-                                <p class="text-[10px] font-bold text-gray-400">ASESOR ESTRELLA</p>
-                                <h3 class="text-lg font-black text-amber-600 truncate">{stats.asesor}</h3>
-                            </div>
-                            <div class="bg-white p-4 rounded-2xl border">
-                                <p class="text-[10px] font-bold text-gray-400">CANAL ESTRELLA</p>
-                                <h3 class="text-lg font-black text-cyan-600 truncate">{stats.canal}</h3>
-                            </div>
+                            <button 
+                                onClick={() => setShowNewLead(true)}
+                                class="bg-[#111827] hover:bg-gray-800 text-white px-5 py-3 rounded-2xl text-xs font-extrabold tracking-wider uppercase transition-all flex items-center justify-center gap-2 shadow-sm"
+                            >
+                                ⚡ Nuevo Prospecto
+                            </button>
                         </div>
 
-                        <input type="text" placeholder="Buscar..." class="w-full p-4 mb-6 rounded-xl border" onChange={(e) => setSearch(e.target.value)}/>
-                        
-                        <div class="bg-white rounded-3xl border overflow-hidden">
-                            <table class="w-full text-sm">
-                                <thead class="bg-gray-50 border-b">
-                                    <tr><th class="p-4">Nombre</th><th class="p-4">Proyecto</th><th class="p-4">Estado</th></tr>
-                                </thead>
-                                <tbody>
-                                    {filteredLeads.map(lead => (
-                                        <tr key={lead.id} class="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedLead(lead)}>
-                                            <td class="p-4 font-bold">{lead.nombre}</td>
-                                            <td class="p-4">{lead.proyecto}</td>
-                                            <td class="p-4">{lead.tipificacion}</td>
+                        {/* Dashboard de Métricas y Semaforo */}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+  {/* Tarjeta 1: SLA */}
+  <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+    <div><p class="text-[9px] font-black text-gray-400 uppercase tracking-widest">SLA Promedio</p>
+    <h3 id="stat-sla" class="text-xl font-black text-emerald-600">--</h3></div>
+  </div>
+  {/* Tarjeta 2: Asesor */}
+  <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+    <div><p class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Asesor Estrella</p>
+    <h3 id="stat-asesor" class="text-xl font-black text-amber-600">--</h3></div>
+  </div>
+  {/* Tarjeta 3: Canal */}
+  <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+    <div><p class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Canal Estrella</p>
+    <h3 id="stat-canal" class="text-xl font-black text-cyan-600">--</h3></div>
+  </div>
+</div>
+
+{/* Semaforización */}
+<div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6">
+  {Object.entries(SEMAFORO).map(([key, value]) => (
+      <div key={key} class={`p-3 rounded-2xl border ${value.color} flex flex-col justify-between`}>
+          <span class="text-[10px] font-bold uppercase tracking-wider opacity-70">{value.label}</span>
+      </div>
+  ))}
+</div>
+
+                        {/* Tabla Ultra-Dinámica */}
+                        <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div class="overflow-x-auto">
+                                <table class="w-full border-collapse text-left text-sm">
+                                    <thead class="bg-[#111827] text-white text-[10px] font-extrabold uppercase tracking-widest">
+                                        <tr>
+                                            <th class="p-4.5 text-center w-12">Alerta</th>
+                                            <th class="p-4.5">Lead / Contacto</th>
+                                            <th class="p-4.5">Acciones Rápidas</th>
+                                            <th class="p-4.5">Proyecto</th>
+                                            <th class="p-4.5">Origen / Campaña</th>
+                                            <th class="p-4.5">Asesor Asignado</th>
+                                            <th class="p-4.5">Semaforización</th>
+                                            <th class="p-4.5">Estado</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100">
+                                        {filteredLeads.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="8" class="p-12 text-center text-gray-400 font-semibold">Sin leads en este momento.</td>
+                                            </tr>
+                                        ) : (
+                                            filteredLeads.map(lead => {
+                                                const sem = getSemaforo(lead);
+                                                const semStyle = SEMAFORO[sem.key];
+                                                const fuenteStyle = FUENTES_CONFIG[lead.fuente] || FUENTES_CONFIG["Otro"];
+                                                const yaContactado = tienePrimerContacto(lead);
+
+                                                return (
+                                                    <tr 
+                                                        key={lead.id} 
+                                                        onClick={() => setSelectedLead(lead)}
+                                                        class="hover:bg-gray-50/80 cursor-pointer transition-all duration-100"
+                                                    >
+                                                        {/* Alerta */}
+                                                        <td class="p-4 text-center" onClick={e => e.stopPropagation()}>
+                                                            <span class={`w-3.5 h-3.5 rounded-full inline-block ${semStyle.color.split(' ')[0]} ring-4 ring-offset-2 ring-transparent ${!yaContactado && sem.key === 'rojo' ? 'animate-bounce' : ''}`}></span>
+                                                        </td>
+
+                                                        {/* Nombre y Contacto */}
+                                                        <td class="p-4">
+                                                            <div class="flex flex-col">
+                                                                <span class="font-extrabold text-gray-900 text-sm leading-tight">{lead.nombre}</span>
+                                                                <span class="text-xs text-gray-400 mt-0.5">{lead.telefono}</span>
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Acción Rápida */}
+                                                        <td class="p-4" onClick={e => e.stopPropagation()}>
+                                                            <div class="flex gap-1.5">
+                                                                <button 
+                                                                    onClick={(e) => triggerWhatsApp(lead, e)}
+                                                                    class="bg-emerald-500 hover:bg-emerald-600 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
+                                                                    title="Chatear ya"
+                                                                >
+                                                                    💬 <span class="hidden lg:inline">WhatsApp</span>
+                                                                </button>
+                                                                <button 
+                                                                    onClick={(e) => triggerCall(lead, e)}
+                                                                    class="bg-gray-900 hover:bg-black text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
+                                                                    title="Llamar ya"
+                                                                >
+                                                                    📞 <span class="hidden lg:inline">Llamar</span>
+                                                                </button>
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Proyecto */}
+                                                        <td class="p-4 font-bold text-gray-800 text-xs tracking-wide uppercase">{lead.proyecto || "—"}</td>
+
+                                                        {/* Origen */}
+                                                        <td class="p-4">
+                                                            <span class={`inline-block px-3 py-1 rounded-full text-[10px] font-extrabold border ${fuenteStyle.bg}`}>
+                                                                {fuenteStyle.label}
+                                                            </span>
+                                                        </td>
+
+                                                        {/* Asesor */}
+                                                        <td class="p-4">
+                                                            <span class={`px-2.5 py-1 rounded-xl text-xs font-bold border ${lead.asesor && lead.asesor !== 'Sin asignar' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
+                                                                👤 {lead.asesor || "Sin asignar"}
+                                                            </span>
+                                                        </td>
+
+                                                        {/* Cronómetro */}
+                                                        <td class="p-4 font-mono font-extrabold text-xs">
+                                                            <span class={`px-2.5 py-1 rounded-lg ${yaContactado ? 'bg-gray-100 text-gray-500' : semStyle.color} border`}>
+                                                                ⏱️ {fmtSegundos(sem.segundos)}
+                                                                {!yaContactado && <span class="text-[9px] font-bold ml-1 opacity-60">espera</span>}
+                                                            </span>
+                                                        </td>
+
+                                                        {/* Estado */}
+                                                        <td class="p-4">
+                                                            <span class="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-xs font-bold border border-gray-200">
+                                                                {lead.tipificacion}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
+                        </>}
                     </main>
 
+                    {/* Modal: Nuevo Lead */}
+                    {showNewLead && (
+                        <Modal onClose={() => setShowNewLead(false)}>
+                            <h2 class="text-lg font-black text-gray-900 mb-4 flex items-center gap-2 tracking-tight">
+                                🚀 REGISTRAR NUEVO LEAD
+                            </h2>
+                            <LeadForm onSave={handleCreateLead} onCancel={() => setShowNewLead(false)} />
+                        </Modal>
+                    )}
+
+                    {/* Modal: Detalle de Lead */}
                     {selectedLead && (
-                        <div class="fixed inset-0 bg-black/50 flex items-center justify-center" onClick={() => setSelectedLead(null)}>
-                            <div class="bg-white p-8 rounded-2xl w-96" onClick={e => e.stopPropagation()}>
-                                <h2 class="font-black text-xl mb-4">{selectedLead.nombre}</h2>
-                                <p>Teléfono: {selectedLead.telefono}</p>
-                                <button onClick={() => setSelectedLead(null)} class="mt-6 bg-gray-900 text-white w-full py-2 rounded-xl">Cerrar</button>
+                        <Modal onClose={() => setSelectedLead(null)}>
+                            <div class="flex justify-between items-start border-b border-gray-100 pb-3 mb-4">
+                                <div>
+                                    <h2 class="text-lg font-black text-gray-900 tracking-tight">{selectedLead.nombre}</h2>
+                                    <p class="text-xs text-gray-400 mt-0.5">Ingreso: {new Date(selectedLead.fecha_ingreso).toLocaleString()}</p>
+                                </div>
+                                <span class={`px-2.5 py-1 rounded-xl text-[11px] font-bold border ${SEMAFORO[getSemaforo(selectedLead).key].color}`}>
+                                    Atendido en: {fmtSegundos(getSemaforo(selectedLead).segundos)}
+                                </span>
                             </div>
-                        </div>
+
+                            <div class="space-y-4">
+                                {/* Datos Rápidos */}
+                                <div class="grid grid-cols-2 gap-3 bg-gray-50 p-3.5 rounded-2xl border border-gray-100 text-xs font-medium">
+                                    <div>
+                                        <span class="text-gray-400 block text-[9px] font-extrabold uppercase">Teléfono</span>
+                                        <span class="text-gray-900 font-bold text-sm">{selectedLead.telefono}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-400 block text-[9px] font-extrabold uppercase">Proyecto</span>
+                                        <span class="text-gray-900 font-bold text-sm uppercase">{selectedLead.proyecto || '—'}</span>
+                                    </div>
+                                </div>
+
+                                {/* Reasignar Asesor */}
+                                <div>
+                                    <label class="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Asesor Asignado</label>
+                                    <select 
+                                        class="w-full border border-gray-200 rounded-xl p-3 text-sm font-semibold text-gray-700 bg-white"
+                                        value={selectedLead.asesor || "Sin asignar"}
+                                        onChange={(e) => handleUpdateField(selectedLead.id, 'asesor', e.target.value)}
+                                    >
+                                        {ASESORES.map(a => <option key={a} value={a}>{a}</option>)}
+                                    </select>
+                                </div>
+
+                                {/* Tipificar Lead */}
+                                <div>
+                                    <label class="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Tipificación Comercial</label>
+                                    <select 
+                                        class="w-full border border-gray-200 rounded-xl p-3 text-sm font-semibold text-gray-700 bg-white"
+                                        value={selectedLead.tipificacion}
+                                        onChange={(e) => handleUpdateField(selectedLead.id, 'tipificacion', e.target.value)}
+                                    >
+                                        {TIPIFICACIONES.map(t => <option key={t} value={t}>{t}</option>)}
+                                    </select>
+                                </div>
+
+                                {/* Parar Reloj */}
+                                {!selectedLead.primer_contacto_seg && (
+                                    <div class="bg-rose-50 border border-rose-100 rounded-2xl p-4">
+                                        <h4 class="text-xs font-extrabold text-rose-800 uppercase tracking-wider mb-1">Contacto pendiente</h4>
+                                        <p class="text-xs text-rose-700/90 mb-3">Si ya llamaste o enviaste el mensaje de WhatsApp, detén el cronómetro para registrar tu tiempo de respuesta.</p>
+                                        <button 
+                                            onClick={() => handleRegistrarContacto(selectedLead)}
+                                            class="w-full bg-[#111827] hover:bg-black text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all tracking-wider uppercase"
+                                        >
+                                            ⏱️ Detener Cronómetro de Atención
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div class="flex justify-end pt-2 border-t border-gray-100">
+                                    <button onClick={() => setSelectedLead(null)} class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-xs font-bold transition-all">Cerrar</button>
+                                </div>
+                            </div>
+                        </Modal>
                     )}
                 </div>
             );
         }
+
+        // ---------- SUB-COMPONENTE: MODAL ----------
+        function Modal({ children, onClose }) {
+            return (
+                <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
+                    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 relative max-h-[90vh] overflow-y-auto border border-gray-100" onClick={e => e.stopPropagation()}>
+                        <button class="absolute top-5 right-5 text-gray-400 hover:text-gray-600 text-lg transition-all" onClick={onClose}>✕</button>
+                        {children}
+                    </div>
+                </div>
+            );
+        }
+
+        // ---------- SUB-COMPONENTE: FORMULARIO ----------
+        function LeadForm({ onSave, onCancel }) {
+            const [nombre, setNombre] = React.useState("");
+            const [telefono, setTelefono] = React.useState("");
+            const [email, setEmail] = React.useState("");
+            const [fuente, setFuente] = React.useState(Object.keys(FUENTES_CONFIG)[0]);
+            const [proyecto, setProyecto] = React.useState(PROYECTOS[0]);
+            const [asesor, setAsesor] = React.useState(ASESORES[0]);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!nombre || !telefono) {
+                    alert("Por favor completa el nombre y el teléfono.");
+                    return;
+                }
+                onSave({ nombre, telefono, email, fuente, proyecto, asesor });
+            };
+
+            return (
+                <form onSubmit={handleSubmit} class="space-y-3.5">
+                    <div>
+                        <label class="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Nombre Completo *</label>
+                        <input type="text" value={nombre} onChange={e => setNombre(e.target.value)} class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#111827]/10 focus:border-[#111827] outline-none font-semibold text-gray-800" placeholder="Ej. Carlos Pérez" required />
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Teléfono *</label>
+                            <input type="text" value={telefono} onChange={e => setTelefono(e.target.value)} class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#111827]/10 focus:border-[#111827] outline-none font-semibold text-gray-800" placeholder="999888777" required />
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Proyecto</label>
+                            <select value={proyecto} onChange={e => setProyecto(e.target.value)} class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#111827]/10 focus:border-[#111827] outline-none bg-white font-semibold text-gray-700">
+                                {PROYECTOS.map(p => <option key={p} value={p}>{p}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Email</label>
+                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#111827]/10 focus:border-[#111827] outline-none font-semibold text-gray-800" placeholder="ejemplo@correo.com" />
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Fuente</label>
+                            <select value={fuente} onChange={e => setFuente(e.target.value)} class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#111827]/10 focus:border-[#111827] outline-none bg-white font-semibold text-gray-700">
+                                {Object.keys(FUENTES_CONFIG).map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-extrabold text-gray-400 uppercase tracking-widest mb-1">Asignar Asesor</label>
+                            <select value={asesor} onChange={e => setAsesor(e.target.value)} class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#111827]/10 focus:border-[#111827] outline-none bg-white font-semibold text-gray-700">
+                                {ASESORES.map(a => <option key={a} value={a}>{a}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2.5 pt-3 border-t border-gray-100">
+                        <button type="button" onClick={onCancel} class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-xs font-bold transition-all">Cancelar</button>
+                        <button type="submit" class="bg-[#111827] hover:bg-gray-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all">Crear Lead</button>
+                    </div>
+                </form>
+            );
+       
+}
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<CRMInmobiliario />);
     </script>
 </body>
 </html>
+
