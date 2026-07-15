@@ -4,10 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CRM Inmobiliario - Sagama</title>
+    <!-- Tailwind CSS para el diseño -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React y Babel para procesar el código en el navegador -->
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- CDN de Supabase -->
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-[#EEF0EC] text-[#1F2A37] min-h-screen">
@@ -18,7 +21,8 @@
         // ---------- CONFIGURACIÓN DE SUPABASE ----------
         const SUPABASE_URL = https://rjymgzlncuyyxytkvrcr.supabase.co; 
         const SUPABASE_ANON_KEY = sb_publishable__Ke4zfQ8QyIsp7dIvrBQHw_yQ3yxQ1Z; 
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // Usamos window.supabase para evitar conflictos de nombres
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         // ---------- CONFIGURACIÓN DEL CRM ----------
         const TIPIFICACIONES = [
