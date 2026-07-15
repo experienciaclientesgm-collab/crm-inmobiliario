@@ -47,7 +47,7 @@
         };
 
         function getSemaforo(lead) {
-            if (!lead.primer_contacto_seg) {
+            if (!tienePrimerContacto(lead)) {
                 const elapsed = (Date.now() - new Date(lead.fecha_ingreso).getTime()) / 1000;
                 if (elapsed <= 30) return { key: "verde", segundos: elapsed };
                 if (elapsed <= 120) return { key: "amarillo", segundos: elapsed };
@@ -66,6 +66,10 @@
             return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
         }
 
+        function tienePrimerContacto(lead) {
+            return lead.primer_contacto_seg !== null && lead.primer_contacto_seg !== undefined;
+        }
+
         function CRMInmobiliario() {
             const [leads, setLeads] = React.useState([]);
             const [loaded, setLoaded] = React.useState(false);
@@ -75,12 +79,39 @@
             const [, forceTick] = React.useState(0);
 
             const stats = React.useMemo(() => {
-                if (leads.length === 0) return { sla: "--", asesor: "--", canal: "--" };
-                const conContacto = leads.filter(l => l.primer_contacto_seg);
-                const avgSla = conContacto.length > 0 ? Math.round(conContacto.reduce((acc, curr) => acc + curr.primer_contacto_seg, 0) / conContacto.length) : 0;
-                const bestAsesor = leads.reduce((a, b) => (leads.filter(l => l.asesor === a).length > leads.filter(l => l.asesor === b.asesor).length ? a : b.asesor), "Ninguno");
-                const bestCanal = leads.reduce((a, b) => (leads.filter(l => l.fuente === a).length > leads.filter(l => l.fuente === b.fuente).length ? a : b.fuente), "Ninguno");
-                return { sla: avgSla > 0 ? fmtSegundos(avgSla) : "0s", asesor: bestAsesor, canal: bestCanal };
+                const conContacto = leads.filter(tienePrimerContacto);
+                const promedio = items => items.length
+                    ? items.reduce((total, item) => total + Number(item.primer_contacto_seg), 0) / items.length
+                    : null;
+
+                const mejorGrupo = (campo, excluir) => {
+                    const grupos = conContacto.reduce((resultado, lead) => {
+                        const nombre = lead[campo] || "Sin asignar";
+                        if (excluir && excluir(nombre)) return resultado;
+                        (resultado[nombre] ||= []).push(lead);
+                        return resultado;
+                    }, {});
+
+                    return Object.entries(grupos)
+                        .map(([nombre, items]) => ({ nombre, cantidad: items.length, sla: promedio(items) }))
+                        .sort((a, b) => a.sla - b.sla || b.cantidad - a.cantidad)[0] || null;
+                };
+
+                const semaforo = leads.reduce((resultado, lead) => {
+                    const estado = getSemaforo(lead).key;
+                    resultado[estado] = (resultado[estado] || 0) + 1;
+                    return resultado;
+                }, { verde: 0, amarillo: 0, naranja: 0, rojo: 0, gris: 0 });
+
+                return {
+                    sla: promedio(conContacto),
+                    atendidos: conContacto.length,
+                    pendientes: leads.length - conContacto.length,
+                    total: leads.length,
+                    asesor: mejorGrupo("asesor", nombre => nombre === "Sin asignar"),
+                    canal: mejorGrupo("fuente"),
+                    semaforo
+                };
             }, [leads]);
 
             React.useEffect(() => {
@@ -103,20 +134,48 @@
                         <h1 class="font-black text-2xl">Sagama CRM</h1>
                     </header>
                     <main class="p-6 max-w-6xl mx-auto">
-                        <div class="grid grid-cols-3 gap-4 mb-6">
-                            <div class="bg-white p-4 rounded-2xl border">
-                                <p class="text-[10px] font-bold text-gray-400">SLA PROMEDIO</p>
-                                <h3 class="text-lg font-black text-emerald-600">{stats.sla}</h3>
+                        <section class="mb-6" aria-label="Resumen operativo">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                                    <p class="text-[10px] font-black text-gray-400 tracking-widest">SLA PROMEDIO</p>
+                                    <div class="flex items-end justify-between gap-3 mt-2">
+                                        <h3 class={`text-2xl font-black ${stats.sla === null ? 'text-gray-400' : stats.sla <= 30 ? 'text-emerald-600' : stats.sla <= 120 ? 'text-amber-600' : 'text-rose-600'}`}>
+                                            {stats.sla === null ? "—" : fmtSegundos(stats.sla)}
+                                        </h3>
+                                        <span class="text-[10px] font-bold text-gray-400">{stats.atendidos} atendidos</span>
+                                    </div>
+                                    <p class="text-[10px] text-gray-400 mt-2">Tiempo hasta el primer contacto</p>
+                                </div>
+                                <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                                    <p class="text-[10px] font-black text-gray-400 tracking-widest">ASESOR ESTRELLA</p>
+                                    <h3 class="text-lg font-black text-amber-600 truncate mt-2">{stats.asesor ? stats.asesor.nombre : "Sin datos"}</h3>
+                                    <p class="text-[10px] text-gray-400 mt-2">{stats.asesor ? `${fmtSegundos(stats.asesor.sla)} promedio · ${stats.asesor.cantidad} leads` : "Aparecerá al atender leads"}</p>
+                                </div>
+                                <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                                    <p class="text-[10px] font-black text-gray-400 tracking-widest">CANAL ESTRELLA</p>
+                                    <h3 class="text-lg font-black text-cyan-600 truncate mt-2">{stats.canal ? stats.canal.nombre : "Sin datos"}</h3>
+                                    <p class="text-[10px] text-gray-400 mt-2">{stats.canal ? `${fmtSegundos(stats.canal.sla)} promedio · ${stats.canal.cantidad} leads` : "Aparecerá al atender leads"}</p>
+                                </div>
                             </div>
-                            <div class="bg-white p-4 rounded-2xl border">
-                                <p class="text-[10px] font-bold text-gray-400">ASESOR ESTRELLA</p>
-                                <h3 class="text-lg font-black text-amber-600 truncate">{stats.asesor}</h3>
+
+                            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                                <div class="flex items-center justify-between mb-3">
+                                    <p class="text-[10px] font-black text-gray-400 tracking-widest">ESTADO DEL EMBUDO</p>
+                                    <p class="text-[10px] font-bold text-gray-400">{stats.total} leads · {stats.pendientes} pendientes</p>
+                                </div>
+                                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                    {Object.entries(SEMAFORO).map(([key, value]) => (
+                                        <div key={key} class="rounded-xl border border-gray-100 p-3 bg-gray-50">
+                                            <div class="flex items-center justify-between gap-2">
+                                                <span class={`w-2.5 h-2.5 rounded-full ${value.color.split(' ')[0]}`}></span>
+                                                <strong class="text-xl font-black text-gray-800">{stats.semaforo[key]}</strong>
+                                            </div>
+                                            <span class="block text-[10px] font-bold uppercase tracking-wide text-gray-500 mt-2">{value.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                            <div class="bg-white p-4 rounded-2xl border">
-                                <p class="text-[10px] font-bold text-gray-400">CANAL ESTRELLA</p>
-                                <h3 class="text-lg font-black text-cyan-600 truncate">{stats.canal}</h3>
-                            </div>
-                        </div>
+                        </section>
 
                         <input type="text" placeholder="Buscar..." class="w-full p-4 mb-6 rounded-xl border" onChange={(e) => setSearch(e.target.value)}/>
                         
